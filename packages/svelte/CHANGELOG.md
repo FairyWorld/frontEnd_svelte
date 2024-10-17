@@ -1,5 +1,61 @@
 # svelte
 
+## 5.0.0-next.268
+
+### Patch Changes
+
+- breaking: disallow state mutations in logic block expression ([#13625](https://github.com/sveltejs/svelte/pull/13625))
+
+- breaking: stronger enumerated types ([#13624](https://github.com/sveltejs/svelte/pull/13624))
+
+- chore: improve runtime performance of derived signals ([#13626](https://github.com/sveltejs/svelte/pull/13626))
+
+## 5.0.0-next.267
+
+### Patch Changes
+
+- fix: ensure inserted code is preserved during migration ([#13617](https://github.com/sveltejs/svelte/pull/13617))
+
+- fix: ensure each block consistency to internal mutations to the collection ([#13614](https://github.com/sveltejs/svelte/pull/13614))
+
+- chore: improve derived ownership model ([#13623](https://github.com/sveltejs/svelte/pull/13623))
+
+- fix: ensure await block scope transforms are isolated ([#13622](https://github.com/sveltejs/svelte/pull/13622))
+
+## 5.0.0-next.266
+
+### Patch Changes
+
+- feat: add hidden until-found and beforematch ([#13612](https://github.com/sveltejs/svelte/pull/13612))
+
+- fix: ensure local prop value is read during teardown ([#13611](https://github.com/sveltejs/svelte/pull/13611))
+
+- fix: take snippets into account when scoping CSS ([#13589](https://github.com/sveltejs/svelte/pull/13589))
+
+- breaking: scope `:not(...)` selectors ([#13568](https://github.com/sveltejs/svelte/pull/13568))
+
+- breaking: scope `:has(...)` selectors ([#13567](https://github.com/sveltejs/svelte/pull/13567))
+
+## 5.0.0-next.265
+
+### Patch Changes
+
+- fix: ensure source and filename are known to compileModule's source map ([#13546](https://github.com/sveltejs/svelte/pull/13546))
+
+- fix: cleanup non-branch effects created inside block effects ([#13600](https://github.com/sveltejs/svelte/pull/13600))
+
+- fix: do no rerun the each block when array change from empty to empty ([#13553](https://github.com/sveltejs/svelte/pull/13553))
+
+- fix: ensure effects destroy owned deriveds upon teardown ([#13563](https://github.com/sveltejs/svelte/pull/13563))
+
+- fix: ensure proxied arrays correctly update their length upon deletions ([#13549](https://github.com/sveltejs/svelte/pull/13549))
+
+- fix: avoid assigning input.value if the value is the same to fix `minlength` ([#13574](https://github.com/sveltejs/svelte/pull/13574))
+
+- fix: use `analysis.name` when migrating `<svelte:self>` ([#13544](https://github.com/sveltejs/svelte/pull/13544))
+
+- fix: strip BOM character from input ([#13548](https://github.com/sveltejs/svelte/pull/13548))
+
 ## 5.0.0-next.264
 
 ### Patch Changes
