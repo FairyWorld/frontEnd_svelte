@@ -15,7 +15,9 @@ import {
 	set_is_destroying_effect,
 	set_is_flushing_effect,
 	set_signal_status,
-	untrack
+	untrack,
+	skip_reaction,
+	capture_signals
 } from '../runtime.js';
 import {
 	DIRTY,
@@ -38,10 +40,13 @@ import {
 } from '../constants.js';
 import { set } from './sources.js';
 import * as e from '../errors.js';
+import * as w from '../warnings.js';
 import { DEV } from 'esm-env';
 import { define_property } from '../../shared/utils.js';
 import { get_next_sibling } from '../dom/operations.js';
 import { destroy_derived } from './deriveds.js';
+import { FILENAME } from '../../../constants.js';
+import { get_location } from '../dev/location.js';
 
 /**
  * @param {'$effect' | '$effect.pre' | '$inspect'} rune
@@ -167,7 +172,9 @@ export function effect_tracking() {
 		return false;
 	}
 
-	return (active_reaction.f & UNOWNED) === 0;
+	// If it's skipped, that's because we're inside an unowned
+	// that is not being tracked by another reaction
+	return !skip_reaction;
 }
 
 /**
@@ -434,8 +441,8 @@ export function destroy_effect(effect, remove_dom = true) {
 		removed = true;
 	}
 
-	destroy_effect_deriveds(effect);
 	destroy_effect_children(effect, remove_dom && !removed);
+	destroy_effect_deriveds(effect);
 	remove_reactions(effect, 0);
 	set_signal_status(effect, DESTROYED);
 
@@ -461,12 +468,12 @@ export function destroy_effect(effect, remove_dom = true) {
 	}
 
 	// `first` and `child` are nulled out in destroy_effect_children
+	// we don't null out `parent` so that error propagation can work correctly
 	effect.next =
 		effect.prev =
 		effect.teardown =
 		effect.ctx =
 		effect.deps =
-		effect.parent =
 		effect.fn =
 		effect.nodes_start =
 		effect.nodes_end =
@@ -574,13 +581,16 @@ export function resume_effect(effect) {
  */
 function resume_children(effect, local) {
 	if ((effect.f & INERT) === 0) return;
-	effect.f ^= INERT;
 
 	// If a dependency of this effect changed while it was paused,
 	// apply the change now
 	if (check_dirtiness(effect)) {
 		update_effect(effect);
 	}
+
+	// Ensure we toggle the flag after possibly updating the effect so that
+	// each block logic can correctly operate on inert items
+	effect.f ^= INERT;
 
 	var child = effect.first;
 
