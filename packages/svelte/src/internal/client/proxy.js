@@ -9,7 +9,7 @@ import {
 	object_prototype
 } from '../shared/utils.js';
 import { state as source, set } from './reactivity/sources.js';
-import { STATE_SYMBOL } from './constants.js';
+import { STATE_SYMBOL } from '#client/constants';
 import { UNINITIALIZED } from '../../constants.js';
 import * as e from './errors.js';
 import { get_stack } from './dev/tracing.js';
@@ -100,6 +100,7 @@ export function proxy(value) {
 						prop,
 						with_parent(() => source(UNINITIALIZED, stack))
 					);
+					update_version(version);
 				}
 			} else {
 				// When working with arrays, we need to also ensure we update the length when removing

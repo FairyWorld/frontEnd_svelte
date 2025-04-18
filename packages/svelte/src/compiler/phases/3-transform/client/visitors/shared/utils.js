@@ -3,7 +3,7 @@
 /** @import { ComponentClientTransformState, Context } from '../../types' */
 import { walk } from 'zimmerframe';
 import { object } from '../../../../../utils/ast.js';
-import * as b from '../../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { sanitize_template_string } from '../../../../../utils/sanitize_template_string.js';
 import { regex_is_valid_identifier } from '../../../../patterns.js';
 import is_reference from 'is-reference';
@@ -69,11 +69,17 @@ export function build_template_chunk(
 				node.metadata.expression
 			);
 
-			has_state ||= node.metadata.expression.has_state;
+			const evaluated = state.scope.evaluate(value);
+
+			has_state ||= node.metadata.expression.has_state && !evaluated.is_known;
 
 			if (values.length === 1) {
 				// If we have a single expression, then pass that in directly to possibly avoid doing
 				// extra work in the template_effect (instead we do the work in set_text).
+				if (evaluated.is_known) {
+					value = b.literal(evaluated.value);
+				}
+
 				return { value, has_state };
 			}
 
@@ -88,8 +94,6 @@ export function build_template_chunk(
 					value = { ...value, right: b.literal('') };
 				}
 			}
-
-			const evaluated = state.scope.evaluate(value);
 
 			if (evaluated.is_known) {
 				quasi.value.cooked += evaluated.value + '';
