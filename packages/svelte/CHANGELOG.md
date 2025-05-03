@@ -1,5 +1,51 @@
 # svelte
 
+## 5.28.2
+
+### Patch Changes
+
+- fix: don't mark selector lists inside `:global` with multiple items as unused ([#15817](https://github.com/sveltejs/svelte/pull/15817))
+
+## 5.28.1
+
+### Patch Changes
+
+- fix: ensure `<svelte:boundary>` properly removes error content in production mode ([#15793](https://github.com/sveltejs/svelte/pull/15793))
+
+- fix: `update_version` after `delete` if `source` is `undefined` and `prop` in `target` ([#15796](https://github.com/sveltejs/svelte/pull/15796))
+
+- fix: emit error on wrong placement of the `:global` block selector ([#15794](https://github.com/sveltejs/svelte/pull/15794))
+
+## 5.28.0
+
+### Minor Changes
+
+- feat: partially evaluate more expressions ([#15781](https://github.com/sveltejs/svelte/pull/15781))
+
+## 5.27.3
+
+### Patch Changes
+
+- fix: use function declaration for snippets in server output to avoid TDZ violation ([#15789](https://github.com/sveltejs/svelte/pull/15789))
+
+## 5.27.2
+
+### Patch Changes
+
+- chore: use pkg.imports for common modules ([#15787](https://github.com/sveltejs/svelte/pull/15787))
+
+## 5.27.1
+
+### Patch Changes
+
+- chore: default params for html blocks ([#15778](https://github.com/sveltejs/svelte/pull/15778))
+
+- fix: correct suggested type for custom events without detail ([#15763](https://github.com/sveltejs/svelte/pull/15763))
+
+- fix: Throw on unrendered snippets in `dev` ([#15766](https://github.com/sveltejs/svelte/pull/15766))
+
+- fix: avoid unnecessary read version increments ([#15777](https://github.com/sveltejs/svelte/pull/15777))
+
 ## 5.27.0
 
 ### Minor Changes
