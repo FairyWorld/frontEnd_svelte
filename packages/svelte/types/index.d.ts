@@ -381,7 +381,7 @@ declare module 'svelte' {
 	 * The event dispatcher can be typed to narrow the allowed event names and the type of the `detail` argument:
 	 * ```ts
 	 * const dispatch = createEventDispatcher<{
-	 *  loaded: never; // does not take a detail argument
+	 *  loaded: null; // does not take a detail argument
 	 *  change: string; // takes a detail argument of type string, which is required
 	 *  optional: number | null; // takes an optional detail argument of type number
 	 * }>();
@@ -620,6 +620,44 @@ declare module 'svelte/animate' {
 		from: DOMRect;
 		to: DOMRect;
 	}, params?: FlipParams): AnimationConfig;
+
+	export {};
+}
+
+declare module 'svelte/attachments' {
+	/**
+	 * An [attachment](https://svelte.dev/docs/svelte/@attach) is a function that runs when an element is mounted
+	 * to the DOM, and optionally returns a function that is called when the element is later removed.
+	 *
+	 * It can be attached to an element with an `{@attach ...}` tag, or by spreading an object containing
+	 * a property created with [`createAttachmentKey`](https://svelte.dev/docs/svelte/svelte-attachments#createAttachmentKey).
+	 */
+	export interface Attachment<T extends EventTarget = Element> {
+		(element: T): void | (() => void);
+	}
+	/**
+	 * Creates an object key that will be recognised as an attachment when the object is spread onto an element,
+	 * as a programmatic alternative to using `{@attach ...}`. This can be useful for library authors, though
+	 * is generally not needed when building an app.
+	 *
+	 * ```svelte
+	 * <script>
+	 * 	import { createAttachmentKey } from 'svelte/attachments';
+	 *
+	 * 	const props = {
+	 * 		class: 'cool',
+	 * 		onclick: () => alert('clicked'),
+	 * 		[createAttachmentKey()]: (node) => {
+	 * 			node.textContent = 'attached!';
+	 * 		}
+	 * 	};
+	 * </script>
+	 *
+	 * <button {...props}>click me</button>
+	 * ```
+	 * @since 5.29
+	 */
+	export function createAttachmentKey(): symbol;
 
 	export {};
 }
@@ -1055,6 +1093,12 @@ declare module 'svelte/compiler' {
 			expression: SimpleCallExpression | (ChainExpression & { expression: SimpleCallExpression });
 		}
 
+		/** A `{@attach foo(...)} tag */
+		export interface AttachTag extends BaseNode {
+			type: 'AttachTag';
+			expression: Expression;
+		}
+
 		/** An `animate:` directive */
 		export interface AnimateDirective extends BaseNode {
 			type: 'AnimateDirective';
@@ -1137,7 +1181,7 @@ declare module 'svelte/compiler' {
 
 		interface BaseElement extends BaseNode {
 			name: string;
-			attributes: Array<Attribute | SpreadAttribute | Directive>;
+			attributes: Array<Attribute | SpreadAttribute | Directive | AttachTag>;
 			fragment: Fragment;
 		}
 
@@ -1257,6 +1301,7 @@ declare module 'svelte/compiler' {
 			type: 'SnippetBlock';
 			expression: Identifier;
 			parameters: Pattern[];
+			typeParams?: string;
 			body: Fragment;
 		}
 
@@ -1327,6 +1372,7 @@ declare module 'svelte/compiler' {
 			| AST.Attribute
 			| AST.SpreadAttribute
 			| Directive
+			| AST.AttachTag
 			| AST.Comment
 			| Block;
 
@@ -1900,11 +1946,77 @@ declare module 'svelte/motion' {
 }
 
 declare module 'svelte/reactivity' {
+	/**
+	 * A reactive version of the built-in [`Date`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date) object.
+	 * Reading the date (whether with methods like `date.getTime()` or `date.toString()`, or via things like [`Intl.DateTimeFormat`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat))
+	 * in an [effect](https://svelte.dev/docs/svelte/$effect) or [derived](https://svelte.dev/docs/svelte/$derived)
+	 * will cause it to be re-evaluated when the value of the date changes.
+	 *
+	 * ```svelte
+	 * <script>
+	 * 	import { SvelteDate } from 'svelte/reactivity';
+	 *
+	 * 	const date = new SvelteDate();
+	 *
+	 * 	const formatter = new Intl.DateTimeFormat(undefined, {
+	 * 	  hour: 'numeric',
+	 * 	  minute: 'numeric',
+	 * 	  second: 'numeric'
+	 * 	});
+	 *
+	 * 	$effect(() => {
+	 * 		const interval = setInterval(() => {
+	 * 			date.setTime(Date.now());
+	 * 		}, 1000);
+	 *
+	 * 		return () => {
+	 * 			clearInterval(interval);
+	 * 		};
+	 * 	});
+	 * </script>
+	 *
+	 * <p>The time is {formatter.format(date)}</p>
+	 * ```
+	 */
 	export class SvelteDate extends Date {
 		
 		constructor(...params: any[]);
 		#private;
 	}
+	/**
+	 * A reactive version of the built-in [`Set`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set) object.
+	 * Reading contents of the set (by iterating, or by reading `set.size` or calling `set.has(...)` as in the [example](https://svelte.dev/playground/53438b51194b4882bcc18cddf9f96f15) below) in an [effect](https://svelte.dev/docs/svelte/$effect) or [derived](https://svelte.dev/docs/svelte/$derived)
+	 * will cause it to be re-evaluated as necessary when the set is updated.
+	 *
+	 * Note that values in a reactive set are _not_ made [deeply reactive](https://svelte.dev/docs/svelte/$state#Deep-state).
+	 *
+	 * ```svelte
+	 * <script>
+	 * 	import { SvelteSet } from 'svelte/reactivity';
+	 * 	let monkeys = new SvelteSet();
+	 *
+	 * 	function toggle(monkey) {
+	 * 		if (monkeys.has(monkey)) {
+	 * 			monkeys.delete(monkey);
+	 * 		} else {
+	 * 			monkeys.add(monkey);
+	 * 		}
+	 * 	}
+	 * </script>
+	 *
+	 * {#each ['🙈', '🙉', '🙊'] as monkey}
+	 * 	<button onclick={() => toggle(monkey)}>{monkey}</button>
+	 * {/each}
+	 *
+	 * <button onclick={() => monkeys.clear()}>clear</button>
+	 *
+	 * {#if monkeys.has('🙈')}<p>see no evil</p>{/if}
+	 * {#if monkeys.has('🙉')}<p>hear no evil</p>{/if}
+	 * {#if monkeys.has('🙊')}<p>speak no evil</p>{/if}
+	 * ```
+	 *
+	 * 
+	 */
 	export class SvelteSet<T> extends Set<T> {
 		
 		constructor(value?: Iterable<T> | null | undefined);
@@ -1912,6 +2024,50 @@ declare module 'svelte/reactivity' {
 		add(value: T): this;
 		#private;
 	}
+	/**
+	 * A reactive version of the built-in [`Map`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map) object.
+	 * Reading contents of the map (by iterating, or by reading `map.size` or calling `map.get(...)` or `map.has(...)` as in the [tic-tac-toe example](https://svelte.dev/playground/0b0ff4aa49c9443f9b47fe5203c78293) below) in an [effect](https://svelte.dev/docs/svelte/$effect) or [derived](https://svelte.dev/docs/svelte/$derived)
+	 * will cause it to be re-evaluated as necessary when the map is updated.
+	 *
+	 * Note that values in a reactive map are _not_ made [deeply reactive](https://svelte.dev/docs/svelte/$state#Deep-state).
+	 *
+	 * ```svelte
+	 * <script>
+	 * 	import { SvelteMap } from 'svelte/reactivity';
+	 * 	import { result } from './game.js';
+	 *
+	 * 	let board = new SvelteMap();
+	 * 	let player = $state('x');
+	 * 	let winner = $derived(result(board));
+	 *
+	 * 	function reset() {
+	 * 		player = 'x';
+	 * 		board.clear();
+	 * 	}
+	 * </script>
+	 *
+	 * <div class="board">
+	 * 	{#each Array(9), i}
+	 * 		<button
+	 * 			disabled={board.has(i) || winner}
+	 * 			onclick={() => {
+	 * 				board.set(i, player);
+	 * 				player = player === 'x' ? 'o' : 'x';
+	 * 			}}
+	 * 		>{board.get(i)}</button>
+	 * 	{/each}
+	 * </div>
+	 *
+	 * {#if winner}
+	 * 	<p>{winner} wins!</p>
+	 * 	<button onclick={reset}>reset</button>
+	 * {:else}
+	 * 	<p>{player} is next</p>
+	 * {/if}
+	 * ```
+	 *
+	 * 
+	 */
 	export class SvelteMap<K, V> extends Map<K, V> {
 		
 		constructor(value?: Iterable<readonly [K, V]> | null | undefined);
@@ -1919,11 +2075,64 @@ declare module 'svelte/reactivity' {
 		set(key: K, value: V): this;
 		#private;
 	}
+	/**
+	 * A reactive version of the built-in [`URL`](https://developer.mozilla.org/en-US/docs/Web/API/URL) object.
+	 * Reading properties of the URL (such as `url.href` or `url.pathname`) in an [effect](https://svelte.dev/docs/svelte/$effect) or [derived](https://svelte.dev/docs/svelte/$derived)
+	 * will cause it to be re-evaluated as necessary when the URL changes.
+	 *
+	 * The `searchParams` property is an instance of [SvelteURLSearchParams](https://svelte.dev/docs/svelte/svelte-reactivity#SvelteURLSearchParams).
+	 *
+	 * [Example](https://svelte.dev/playground/5a694758901b448c83dc40dc31c71f2a):
+	 *
+	 * ```svelte
+	 * <script>
+	 * 	import { SvelteURL } from 'svelte/reactivity';
+	 *
+	 * 	const url = new SvelteURL('https://example.com/path');
+	 * </script>
+	 *
+	 * <!-- changes to these... -->
+	 * <input bind:value={url.protocol} />
+	 * <input bind:value={url.hostname} />
+	 * <input bind:value={url.pathname} />
+	 *
+	 * <hr />
+	 *
+	 * <!-- will update `href` and vice versa -->
+	 * <input bind:value={url.href} size="65" />
+	 * ```
+	 */
 	export class SvelteURL extends URL {
 		get searchParams(): SvelteURLSearchParams;
 		#private;
 	}
 	const REPLACE: unique symbol;
+	/**
+	 * A reactive version of the built-in [`URLSearchParams`](https://developer.mozilla.org/en-US/docs/Web/API/URLSearchParams) object.
+	 * Reading its contents (by iterating, or by calling `params.get(...)` or `params.getAll(...)` as in the [example](https://svelte.dev/playground/b3926c86c5384bab9f2cf993bc08c1c8) below) in an [effect](https://svelte.dev/docs/svelte/$effect) or [derived](https://svelte.dev/docs/svelte/$derived)
+	 * will cause it to be re-evaluated as necessary when the params are updated.
+	 *
+	 * ```svelte
+	 * <script>
+	 * 	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	 *
+	 * 	const params = new SvelteURLSearchParams('message=hello');
+	 *
+	 * 	let key = $state('key');
+	 * 	let value = $state('value');
+	 * </script>
+	 *
+	 * <input bind:value={key} />
+	 * <input bind:value={value} />
+	 * <button onclick={() => params.append(key, value)}>append</button>
+	 *
+	 * <p>?{params.toString()}</p>
+	 *
+	 * {#each params as [key, value]}
+	 * 	<p>{key}: {value}</p>
+	 * {/each}
+	 * ```
+	 */
 	export class SvelteURLSearchParams extends URLSearchParams {
 		
 		[REPLACE](params: URLSearchParams): void;

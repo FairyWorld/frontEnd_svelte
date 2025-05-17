@@ -12,6 +12,7 @@ import {
 	hydrate_next,
 	hydrate_node,
 	hydrating,
+	read_hydration_instruction,
 	remove_nodes,
 	set_hydrate_node,
 	set_hydrating
@@ -33,9 +34,9 @@ import {
 } from '../../reactivity/effects.js';
 import { source, mutable_source, internal_set } from '../../reactivity/sources.js';
 import { array_from, is_array } from '../../../shared/utils.js';
-import { INERT } from '../../constants.js';
+import { INERT } from '#client/constants';
 import { queue_micro_task } from '../task.js';
-import { active_effect, active_reaction, get } from '../../runtime.js';
+import { active_effect, get } from '../../runtime.js';
 import { DEV } from 'esm-env';
 import { derived_safe_equal } from '../../reactivity/deriveds.js';
 
@@ -160,7 +161,7 @@ export function each(node, flags, get_collection, get_key, render_fn, fallback_f
 		let mismatch = false;
 
 		if (hydrating) {
-			var is_else = /** @type {Comment} */ (anchor).data === HYDRATION_START_ELSE;
+			var is_else = read_hydration_instruction(anchor) === HYDRATION_START_ELSE;
 
 			if (is_else !== (length === 0)) {
 				// hydration mismatch — remove the server-rendered DOM and start over

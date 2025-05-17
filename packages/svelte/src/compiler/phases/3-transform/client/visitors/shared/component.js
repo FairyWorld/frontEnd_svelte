@@ -3,7 +3,7 @@
 /** @import { ComponentContext } from '../../types.js' */
 import { dev, is_ignored } from '../../../../../state.js';
 import { get_attribute_chunks, object } from '../../../../../utils/ast.js';
-import * as b from '../../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { build_bind_this, memoize_expression, validate_binding } from '../shared/utils.js';
 import { build_attribute_value } from '../shared/element.js';
 import { build_event_handler } from './events.js';
@@ -257,6 +257,14 @@ export function build_component(node, component_name, context, anchor = context.
 					);
 				}
 			}
+		} else if (attribute.type === 'AttachTag') {
+			let expression = /** @type {Expression} */ (context.visit(attribute.expression));
+
+			if (attribute.metadata.expression.has_state) {
+				expression = b.arrow([b.id('$$node')], b.call(expression, b.id('$$node')));
+			}
+
+			push_prop(b.prop('get', b.call('$.attachment'), expression, true));
 		}
 	}
 

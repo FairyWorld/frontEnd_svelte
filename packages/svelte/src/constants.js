@@ -22,7 +22,6 @@ export const HYDRATION_START = '[';
 /** used to indicate that an `{:else}...` block was rendered */
 export const HYDRATION_START_ELSE = '[!';
 export const HYDRATION_END = ']';
-export const HYDRATION_AWAIT_THEN = '!';
 export const HYDRATION_ERROR = {};
 
 export const ELEMENT_IS_NAMESPACED = 1;
@@ -56,3 +55,5 @@ export const IGNORABLE_RUNTIME_WARNINGS = /** @type {const} */ ([
  * TODO this is currently unused
  */
 export const ELEMENTS_WITHOUT_TEXT = ['audio', 'datalist', 'dl', 'optgroup', 'select', 'video'];
+
+export const ATTACHMENT_KEY = '@attach';

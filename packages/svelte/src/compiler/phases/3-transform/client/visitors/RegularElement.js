@@ -1,4 +1,4 @@
-/** @import { ArrayExpression, Expression, ExpressionStatement, Identifier, MemberExpression, ObjectExpression, Statement } from 'estree' */
+/** @import { ArrayExpression, Expression, ExpressionStatement, Identifier, MemberExpression, ObjectExpression } from 'estree' */
 /** @import { AST } from '#compiler' */
 /** @import { SourceLocation } from '#shared' */
 /** @import { ComponentClientTransformState, ComponentContext } from '../types' */
@@ -13,7 +13,7 @@ import {
 import { escape_html } from '../../../../../escaping.js';
 import { dev, is_ignored, locator } from '../../../../state.js';
 import { is_event_attribute, is_text_attribute } from '../../../../utils/ast.js';
-import * as b from '../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { is_custom_element_node } from '../../../nodes.js';
 import { clean_nodes, determine_namespace_for_children } from '../../utils.js';
 import { build_getter } from '../utils.js';
@@ -83,7 +83,7 @@ export function RegularElement(node, context) {
 	/** @type {AST.StyleDirective[]} */
 	const style_directives = [];
 
-	/** @type {Array<AST.AnimateDirective | AST.BindDirective | AST.OnDirective | AST.TransitionDirective | AST.UseDirective>} */
+	/** @type {Array<AST.AnimateDirective | AST.BindDirective | AST.OnDirective | AST.TransitionDirective | AST.UseDirective | AST.AttachTag>} */
 	const other_directives = [];
 
 	/** @type {ExpressionStatement[]} */
@@ -151,6 +151,10 @@ export function RegularElement(node, context) {
 
 			case 'UseDirective':
 				has_use = true;
+				other_directives.push(attribute);
+				break;
+
+			case 'AttachTag':
 				other_directives.push(attribute);
 				break;
 		}
@@ -560,7 +564,7 @@ export function build_style_directives_object(style_directives, context) {
 
 /**
  * Serializes an assignment to an element property by adding relevant statements to either only
- * the init or the the init and update arrays, depending on whether or not the value is dynamic.
+ * the init or the init and update arrays, depending on whether or not the value is dynamic.
  * Resulting code for static looks something like this:
  * ```js
  * element.property = value;
