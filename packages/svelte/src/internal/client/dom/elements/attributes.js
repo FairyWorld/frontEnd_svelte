@@ -4,7 +4,7 @@ import { get_descriptors, get_prototype_of } from '../../../shared/utils.js';
 import { create_event, delegate } from './events.js';
 import { add_form_reset_listener, autofocus } from './misc.js';
 import * as w from '../../warnings.js';
-import { LOADING_ATTR_SYMBOL } from '../../constants.js';
+import { LOADING_ATTR_SYMBOL } from '#client/constants';
 import { queue_idle_task } from '../task.js';
 import { is_capture_event, is_delegated, normalize_attribute } from '../../../../utils.js';
 import {
@@ -13,10 +13,11 @@ import {
 	set_active_effect,
 	set_active_reaction
 } from '../../runtime.js';
+import { attach } from './attachments.js';
 import { clsx } from '../../../shared/attributes.js';
 import { set_class } from './class.js';
 import { set_style } from './style.js';
-import { NAMESPACE_HTML } from '../../../../constants.js';
+import { ATTACHMENT_KEY, NAMESPACE_HTML } from '../../../../constants.js';
 
 export const CLASS = Symbol('class');
 export const STYLE = Symbol('style');
@@ -444,6 +445,12 @@ export function set_attributes(element, prev, next, css_hash, skip_warning = fal
 
 	if (is_hydrating_custom_element) {
 		set_hydrating(true);
+	}
+
+	for (let symbol of Object.getOwnPropertySymbols(next)) {
+		if (symbol.description === ATTACHMENT_KEY) {
+			attach(element, () => next[symbol]);
+		}
 	}
 
 	return current;

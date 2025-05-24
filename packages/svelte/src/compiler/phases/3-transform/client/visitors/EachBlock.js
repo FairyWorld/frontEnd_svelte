@@ -11,7 +11,7 @@ import {
 } from '../../../../../constants.js';
 import { dev } from '../../../../state.js';
 import { extract_paths, object } from '../../../../utils/ast.js';
-import * as b from '../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { build_getter } from '../utils.js';
 import { get_value } from './shared/declarations.js';
 
@@ -32,7 +32,7 @@ export function EachBlock(node, context) {
 	);
 
 	if (!each_node_meta.is_controlled) {
-		context.state.template.push('<!>');
+		context.state.template.push_comment();
 	}
 
 	let flags = 0;
