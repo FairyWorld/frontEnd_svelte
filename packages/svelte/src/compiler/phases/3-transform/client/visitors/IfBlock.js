@@ -1,14 +1,14 @@
-/** @import { BlockStatement, Expression, Identifier } from 'estree' */
+/** @import { BlockStatement, Expression } from 'estree' */
 /** @import { AST } from '#compiler' */
 /** @import { ComponentContext } from '../types' */
-import * as b from '../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 
 /**
  * @param {AST.IfBlock} node
  * @param {ComponentContext} context
  */
 export function IfBlock(node, context) {
-	context.state.template.push('<!>');
+	context.state.template.push_comment();
 	const statements = [];
 
 	const consequent = /** @type {BlockStatement} */ (context.visit(node.consequent));

@@ -2,7 +2,7 @@
 /** @import { AST } from '#compiler' */
 /** @import { ComponentContext } from '../types' */
 import { dev } from '../../../../state.js';
-import * as b from '../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 
 /**
  * @param {AST.SvelteBoundary} node
@@ -88,7 +88,7 @@ export function SvelteBoundary(node, context) {
 		b.call('$.boundary', context.state.node, props, b.arrow([b.id('$$anchor')], block))
 	);
 
-	context.state.template.push('<!>');
+	context.state.template.push_comment();
 	context.state.init.push(
 		external_statements.length > 0 ? b.block([...external_statements, boundary]) : boundary
 	);
