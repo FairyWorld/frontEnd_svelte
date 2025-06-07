@@ -2,7 +2,7 @@
 /** @import { AST } from '#compiler' */
 /** @import { ComponentClientTransformState, ComponentContext } from '../types' */
 import { extract_identifiers } from '../../../../utils/ast.js';
-import * as b from '../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { create_derived } from '../utils.js';
 import { get_value } from './shared/declarations.js';
 
@@ -11,7 +11,7 @@ import { get_value } from './shared/declarations.js';
  * @param {ComponentContext} context
  */
 export function AwaitBlock(node, context) {
-	context.state.template.push('<!>');
+	context.state.template.push_comment();
 
 	// Visit {#await <expression>} first to ensure that scopes are in the correct order
 	const expression = b.thunk(/** @type {Expression} */ (context.visit(node.expression)));

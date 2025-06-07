@@ -1,7 +1,7 @@
 /** @import { AssignmentExpression, Expression, UpdateExpression } from 'estree' */
 /** @import { Context } from '../types' */
 import { object } from '../../../../utils/ast.js';
-import * as b from '../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { validate_mutation } from './shared/utils.js';
 
 /**
@@ -15,7 +15,7 @@ export function UpdateExpression(node, context) {
 		argument.type === 'MemberExpression' &&
 		argument.object.type === 'ThisExpression' &&
 		argument.property.type === 'PrivateIdentifier' &&
-		context.state.private_state.has(argument.property.name)
+		context.state.state_fields.has('#' + argument.property.name)
 	) {
 		let fn = '$.update';
 		if (node.prefix) fn += '_pre';

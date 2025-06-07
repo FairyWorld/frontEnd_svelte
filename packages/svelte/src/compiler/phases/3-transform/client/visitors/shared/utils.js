@@ -3,7 +3,7 @@
 /** @import { ComponentClientTransformState, Context } from '../../types' */
 import { walk } from 'zimmerframe';
 import { object } from '../../../../../utils/ast.js';
-import * as b from '../../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { sanitize_template_string } from '../../../../../utils/sanitize_template_string.js';
 import { regex_is_valid_identifier } from '../../../../patterns.js';
 import is_reference from 'is-reference';
@@ -21,12 +21,12 @@ export function memoize_expression(state, value) {
 }
 
 /**
- *
- * @param {ComponentClientTransformState} state
+ * Pushes `value` into `expressions` and returns a new id
+ * @param {Expression[]} expressions
  * @param {Expression} value
  */
-export function get_expression_id(state, value) {
-	return b.id(`$${state.expressions.push(value) - 1}`);
+export function get_expression_id(expressions, value) {
+	return b.id(`$${expressions.push(value) - 1}`);
 }
 
 /**
@@ -40,7 +40,8 @@ export function build_template_chunk(
 	values,
 	visit,
 	state,
-	memoize = (value, metadata) => (metadata.has_call ? get_expression_id(state, value) : value)
+	memoize = (value, metadata) =>
+		metadata.has_call ? get_expression_id(state.expressions, value) : value
 ) {
 	/** @type {Expression[]} */
 	const expressions = [];
@@ -69,11 +70,17 @@ export function build_template_chunk(
 				node.metadata.expression
 			);
 
-			has_state ||= node.metadata.expression.has_state;
+			const evaluated = state.scope.evaluate(value);
+
+			has_state ||= node.metadata.expression.has_state && !evaluated.is_known;
 
 			if (values.length === 1) {
 				// If we have a single expression, then pass that in directly to possibly avoid doing
 				// extra work in the template_effect (instead we do the work in set_text).
+				if (evaluated.is_known) {
+					value = b.literal((evaluated.value ?? '') + '');
+				}
+
 				return { value, has_state };
 			}
 
@@ -89,10 +96,8 @@ export function build_template_chunk(
 				}
 			}
 
-			const evaluated = state.scope.evaluate(value);
-
 			if (evaluated.is_known) {
-				quasi.value.cooked += evaluated.value + '';
+				quasi.value.cooked += (evaluated.value ?? '') + '';
 			} else {
 				if (!evaluated.is_defined) {
 					// add `?? ''` where necessary
@@ -320,15 +325,18 @@ export function validate_mutation(node, context, expression) {
 	const state = /** @type {ComponentClientTransformState} */ (context.state);
 	state.analysis.needs_mutation_validation = true;
 
-	/** @type {Array<Identifier | Literal>} */
+	/** @type {Array<Identifier | Literal | Expression>} */
 	const path = [];
 
 	while (left.type === 'MemberExpression') {
 		if (left.property.type === 'Literal') {
 			path.unshift(left.property);
 		} else if (left.property.type === 'Identifier') {
+			const transform = Object.hasOwn(context.state.transform, left.property.name)
+				? context.state.transform[left.property.name]
+				: null;
 			if (left.computed) {
-				path.unshift(left.property);
+				path.unshift(transform?.read ? transform.read(left.property) : left.property);
 			} else {
 				path.unshift(b.literal(left.property.name));
 			}
