@@ -135,6 +135,10 @@ export namespace AST {
 	export interface HtmlTag extends BaseNode {
 		type: 'HtmlTag';
 		expression: Expression;
+		/** @internal */
+		metadata: {
+			expression: ExpressionMetadata;
+		};
 	}
 
 	/** An HTML comment */
@@ -151,6 +155,10 @@ export namespace AST {
 		declaration: VariableDeclaration & {
 			declarations: [VariableDeclarator & { id: Pattern; init: Expression }];
 		};
+		/** @internal */
+		metadata: {
+			expression: ExpressionMetadata;
+		};
 	}
 
 	/** A `{@debug ...}` tag */
@@ -165,12 +173,23 @@ export namespace AST {
 		expression: SimpleCallExpression | (ChainExpression & { expression: SimpleCallExpression });
 		/** @internal */
 		metadata: {
+			expression: ExpressionMetadata;
 			dynamic: boolean;
 			arguments: ExpressionMetadata[];
 			path: SvelteNode[];
 			/** The set of locally-defined snippets that this render tag could correspond to,
 			 * used for CSS pruning purposes */
 			snippets: Set<SnippetBlock>;
+		};
+	}
+
+	/** A `{@attach foo(...)} tag */
+	export interface AttachTag extends BaseNode {
+		type: 'AttachTag';
+		expression: Expression;
+		/** @internal */
+		metadata: {
+			expression: ExpressionMetadata;
 		};
 	}
 
@@ -273,7 +292,7 @@ export namespace AST {
 
 	interface BaseElement extends BaseNode {
 		name: string;
-		attributes: Array<Attribute | SpreadAttribute | Directive>;
+		attributes: Array<Attribute | SpreadAttribute | Directive | AttachTag>;
 		fragment: Fragment;
 	}
 
@@ -422,6 +441,11 @@ export namespace AST {
 			 * This saves us from creating an extra comment and insertion being faster.
 			 */
 			is_controlled: boolean;
+			/**
+			 * Bindings this each block transitively depends on. In legacy mode, we
+			 * invalidate these bindings when mutations happen to each block items
+			 */
+			transitive_deps: Set<Binding>;
 		};
 	}
 
@@ -432,6 +456,10 @@ export namespace AST {
 		test: Expression;
 		consequent: Fragment;
 		alternate: Fragment | null;
+		/** @internal */
+		metadata: {
+			expression: ExpressionMetadata;
+		};
 	}
 
 	/** An `{#await ...}` block */
@@ -446,18 +474,27 @@ export namespace AST {
 		pending: Fragment | null;
 		then: Fragment | null;
 		catch: Fragment | null;
+		/** @internal */
+		metadata: {
+			expression: ExpressionMetadata;
+		};
 	}
 
 	export interface KeyBlock extends BaseNode {
 		type: 'KeyBlock';
 		expression: Expression;
 		fragment: Fragment;
+		/** @internal */
+		metadata: {
+			expression: ExpressionMetadata;
+		};
 	}
 
 	export interface SnippetBlock extends BaseNode {
 		type: 'SnippetBlock';
 		expression: Identifier;
 		parameters: Pattern[];
+		typeParams?: string;
 		body: Fragment;
 		/** @internal */
 		metadata: {
@@ -536,7 +573,13 @@ export namespace AST {
 		| AST.SvelteWindow
 		| AST.SvelteBoundary;
 
-	export type Tag = AST.ExpressionTag | AST.HtmlTag | AST.ConstTag | AST.DebugTag | AST.RenderTag;
+	export type Tag =
+		| AST.AttachTag
+		| AST.ConstTag
+		| AST.DebugTag
+		| AST.ExpressionTag
+		| AST.HtmlTag
+		| AST.RenderTag;
 
 	export type TemplateNode =
 		| AST.Root
@@ -546,6 +589,7 @@ export namespace AST {
 		| AST.Attribute
 		| AST.SpreadAttribute
 		| Directive
+		| AST.AttachTag
 		| AST.Comment
 		| Block;
 

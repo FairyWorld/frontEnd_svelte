@@ -15,6 +15,7 @@ import { derived } from '../../src/internal/client/reactivity/deriveds';
 import { snapshot } from '../../src/internal/shared/clone.js';
 import { SvelteSet } from '../../src/reactivity/set';
 import { DESTROYED } from '../../src/internal/client/constants';
+import { noop } from 'svelte/internal/client';
 
 /**
  * @param runes runes mode
@@ -469,6 +470,9 @@ describe('signals', () => {
 	test('schedules rerun when writing to signal before reading it', (runes) => {
 		if (!runes) return () => {};
 
+		const error = console.error;
+		console.error = noop;
+
 		const value = state({ count: 0 });
 		user_effect(() => {
 			set(value, { count: 0 });
@@ -482,13 +486,18 @@ describe('signals', () => {
 			} catch (e: any) {
 				assert.include(e.message, 'effect_update_depth_exceeded');
 				errored = true;
+			} finally {
+				assert.equal(errored, true);
+				console.error = error;
 			}
-			assert.equal(errored, true);
 		};
 	});
 
 	test('schedules rerun when updating deeply nested value', (runes) => {
 		if (!runes) return () => {};
+
+		const error = console.error;
+		console.error = noop;
 
 		const value = proxy({ a: { b: { c: 0 } } });
 		user_effect(() => {
@@ -502,13 +511,18 @@ describe('signals', () => {
 			} catch (e: any) {
 				assert.include(e.message, 'effect_update_depth_exceeded');
 				errored = true;
+			} finally {
+				assert.equal(errored, true);
+				console.error = error;
 			}
-			assert.equal(errored, true);
 		};
 	});
 
 	test('schedules rerun when writing to signal before reading it', (runes) => {
 		if (!runes) return () => {};
+
+		const error = console.error;
+		console.error = noop;
 
 		const value = proxy({ arr: [] });
 		user_effect(() => {
@@ -523,8 +537,10 @@ describe('signals', () => {
 			} catch (e: any) {
 				assert.include(e.message, 'effect_update_depth_exceeded');
 				errored = true;
+			} finally {
+				assert.equal(errored, true);
+				console.error = error;
 			}
-			assert.equal(errored, true);
 		};
 	});
 
@@ -1002,6 +1018,41 @@ describe('signals', () => {
 
 		return () => {
 			flushSync();
+		};
+	});
+
+	test('nested effects depend on state of upper effects', () => {
+		const logs: number[] = [];
+
+		user_effect(() => {
+			const raw = state(0);
+			const proxied = proxy({ current: 0 });
+
+			// We need those separate, else one working and rerunning the effect
+			// could mask the other one not rerunning
+			user_effect(() => {
+				logs.push($.get(raw));
+			});
+
+			user_effect(() => {
+				logs.push(proxied.current);
+			});
+
+			// Important so that the updating effect is not running
+			// together with the reading effects
+			flushSync();
+
+			user_effect(() => {
+				$.untrack(() => {
+					set(raw, $.get(raw) + 1);
+					proxied.current += 1;
+				});
+			});
+		});
+
+		return () => {
+			flushSync();
+			assert.deepEqual(logs, [0, 0, 1, 1]);
 		};
 	});
 

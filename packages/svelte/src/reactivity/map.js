@@ -1,10 +1,52 @@
 /** @import { Source } from '#client' */
 import { DEV } from 'esm-env';
 import { set, source } from '../internal/client/reactivity/sources.js';
+import { label, tag } from '../internal/client/dev/tracing.js';
 import { get } from '../internal/client/runtime.js';
 import { increment } from './utils.js';
 
 /**
+ * A reactive version of the built-in [`Map`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map) object.
+ * Reading contents of the map (by iterating, or by reading `map.size` or calling `map.get(...)` or `map.has(...)` as in the [tic-tac-toe example](https://svelte.dev/playground/0b0ff4aa49c9443f9b47fe5203c78293) below) in an [effect](https://svelte.dev/docs/svelte/$effect) or [derived](https://svelte.dev/docs/svelte/$derived)
+ * will cause it to be re-evaluated as necessary when the map is updated.
+ *
+ * Note that values in a reactive map are _not_ made [deeply reactive](https://svelte.dev/docs/svelte/$state#Deep-state).
+ *
+ * ```svelte
+ * <script>
+ * 	import { SvelteMap } from 'svelte/reactivity';
+ * 	import { result } from './game.js';
+ *
+ * 	let board = new SvelteMap();
+ * 	let player = $state('x');
+ * 	let winner = $derived(result(board));
+ *
+ * 	function reset() {
+ * 		player = 'x';
+ * 		board.clear();
+ * 	}
+ * </script>
+ *
+ * <div class="board">
+ * 	{#each Array(9), i}
+ * 		<button
+ * 			disabled={board.has(i) || winner}
+ * 			onclick={() => {
+ * 				board.set(i, player);
+ * 				player = player === 'x' ? 'o' : 'x';
+ * 			}}
+ * 		>{board.get(i)}</button>
+ * 	{/each}
+ * </div>
+ *
+ * {#if winner}
+ * 	<p>{winner} wins!</p>
+ * 	<button onclick={reset}>reset</button>
+ * {:else}
+ * 	<p>{player} is next</p>
+ * {/if}
+ * ```
+ *
  * @template K
  * @template V
  * @extends {Map<K, V>}
@@ -21,8 +63,13 @@ export class SvelteMap extends Map {
 	constructor(value) {
 		super();
 
-		// If the value is invalid then the native exception will fire here
-		if (DEV) value = new Map(value);
+		if (DEV) {
+			// If the value is invalid then the native exception will fire here
+			value = new Map(value);
+
+			tag(this.#version, 'SvelteMap version');
+			tag(this.#size, 'SvelteMap.size');
+		}
 
 		if (value) {
 			for (var [key, v] of value) {
@@ -41,6 +88,11 @@ export class SvelteMap extends Map {
 			var ret = super.get(key);
 			if (ret !== undefined) {
 				s = source(0);
+
+				if (DEV) {
+					tag(s, `SvelteMap get(${label(key)})`);
+				}
+
 				sources.set(key, s);
 			} else {
 				// We should always track the version in case
@@ -72,6 +124,11 @@ export class SvelteMap extends Map {
 			var ret = super.get(key);
 			if (ret !== undefined) {
 				s = source(0);
+
+				if (DEV) {
+					tag(s, `SvelteMap get(${label(key)})`);
+				}
+
 				sources.set(key, s);
 			} else {
 				// We should always track the version in case
@@ -97,7 +154,13 @@ export class SvelteMap extends Map {
 		var version = this.#version;
 
 		if (s === undefined) {
-			sources.set(key, source(0));
+			s = source(0);
+
+			if (DEV) {
+				tag(s, `SvelteMap get(${label(key)})`);
+			}
+
+			sources.set(key, s);
 			set(this.#size, super.size);
 			increment(version);
 		} else if (prev_res !== value) {
@@ -156,12 +219,18 @@ export class SvelteMap extends Map {
 		if (this.#size.v !== sources.size) {
 			for (var key of super.keys()) {
 				if (!sources.has(key)) {
-					sources.set(key, source(0));
+					var s = source(0);
+
+					if (DEV) {
+						tag(s, `SvelteMap get(${label(key)})`);
+					}
+
+					sources.set(key, s);
 				}
 			}
 		}
 
-		for (var [, s] of this.#sources) {
+		for ([, s] of this.#sources) {
 			get(s);
 		}
 	}
