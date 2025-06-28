@@ -1,6 +1,15 @@
-import type { AST, Binding } from '#compiler';
-import type { Identifier, LabeledStatement, Node, Program } from 'estree';
+import type { AST, Binding, StateField } from '#compiler';
+import type {
+	AssignmentExpression,
+	ClassBody,
+	Identifier,
+	LabeledStatement,
+	Node,
+	Program
+} from 'estree';
 import type { Scope, ScopeRoot } from './scope.js';
+import type { StateCreationRuneName } from '../../utils.js';
+import type { AnalysisState } from './2-analyze/types.js';
 
 export interface Js {
 	ast: Program;
@@ -29,6 +38,8 @@ export interface Analysis {
 	immutable: boolean;
 	tracing: boolean;
 
+	classes: Map<ClassBody, Map<string, StateField>>;
+
 	// TODO figure out if we can move this to ComponentAnalysis
 	accessors: boolean;
 }
@@ -40,6 +51,7 @@ export interface ComponentAnalysis extends Analysis {
 	/** Used for CSS pruning and scoping */
 	elements: Array<AST.RegularElement | AST.SvelteElement>;
 	runes: boolean;
+	maybe_runes: boolean;
 	tracing: boolean;
 	exports: Array<{ name: string; alias: string | null }>;
 	/** Whether the component uses `$$props` */

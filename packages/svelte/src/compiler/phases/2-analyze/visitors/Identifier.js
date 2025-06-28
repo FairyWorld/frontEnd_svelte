@@ -1,5 +1,4 @@
 /** @import { Expression, Identifier } from 'estree' */
-/** @import { EachBlock } from '#compiler' */
 /** @import { Context } from '../types' */
 import is_reference from 'is-reference';
 import { should_proxy } from '../../3-transform/client/utils.js';
@@ -40,7 +39,7 @@ export function Identifier(node, context) {
 		if (
 			is_rune(node.name) &&
 			context.state.scope.get(node.name) === null &&
-			context.state.scope.get(node.name.slice(1)) === null
+			context.state.scope.get(node.name.slice(1))?.kind !== 'store_sub'
 		) {
 			/** @type {Expression} */
 			let current = node;
@@ -91,7 +90,11 @@ export function Identifier(node, context) {
 	if (binding) {
 		if (context.state.expression) {
 			context.state.expression.dependencies.add(binding);
-			context.state.expression.has_state ||= binding.kind !== 'normal';
+			context.state.expression.references.add(binding);
+			context.state.expression.has_state ||=
+				binding.kind !== 'static' &&
+				!binding.is_function() &&
+				!context.state.scope.evaluate(node).is_known;
 		}
 
 		if (
