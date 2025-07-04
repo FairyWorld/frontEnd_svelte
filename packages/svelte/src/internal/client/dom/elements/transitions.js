@@ -12,7 +12,7 @@ import { loop } from '../../loop.js';
 import { should_intro } from '../../render.js';
 import { current_each_item } from '../blocks/each.js';
 import { TRANSITION_GLOBAL, TRANSITION_IN, TRANSITION_OUT } from '../../../../constants.js';
-import { BLOCK_EFFECT, EFFECT_RAN, EFFECT_TRANSPARENT } from '../../constants.js';
+import { BLOCK_EFFECT, EFFECT_RAN, EFFECT_TRANSPARENT } from '#client/constants';
 import { queue_micro_task } from '../task.js';
 import { without_reactive_context } from './bindings/shared.js';
 
@@ -381,9 +381,15 @@ function animate(element, options, counterpart, t2, on_finish) {
 	// create a dummy animation that lasts as long as the delay (but with whatever devtools
 	// multiplier is in effect). in the common case that it is `0`, we keep it anyway so that
 	// the CSS keyframes aren't created until the DOM is updated
-	var animation = element.animate(keyframes, { duration: delay });
+	//
+	// fill forwards to prevent the element from rendering without styles applied
+	// see https://github.com/sveltejs/svelte/issues/14732
+	var animation = element.animate(keyframes, { duration: delay, fill: 'forwards' });
 
 	animation.onfinish = () => {
+		// remove dummy animation from the stack to prevent conflict with main animation
+		animation.cancel();
+
 		// for bidirectional transitions, we start from the current position,
 		// rather than doing a full intro/outro
 		var t1 = counterpart?.t() ?? 1 - t2;

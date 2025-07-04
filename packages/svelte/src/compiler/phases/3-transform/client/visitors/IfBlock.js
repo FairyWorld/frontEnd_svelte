@@ -1,14 +1,15 @@
-/** @import { BlockStatement, Expression, Identifier } from 'estree' */
+/** @import { BlockStatement, Expression } from 'estree' */
 /** @import { AST } from '#compiler' */
 /** @import { ComponentContext } from '../types' */
-import * as b from '../../../../utils/builders.js';
+import * as b from '#compiler/builders';
+import { build_expression, add_svelte_meta } from './shared/utils.js';
 
 /**
  * @param {AST.IfBlock} node
  * @param {ComponentContext} context
  */
 export function IfBlock(node, context) {
-	context.state.template.push('<!>');
+	context.state.template.push_comment();
 	const statements = [];
 
 	const consequent = /** @type {BlockStatement} */ (context.visit(node.consequent));
@@ -31,6 +32,8 @@ export function IfBlock(node, context) {
 		statements.push(b.var(b.id(alternate_id), b.arrow(alternate_args, alternate)));
 	}
 
+	const test = build_expression(context, node.test, node.metadata.expression);
+
 	/** @type {Expression[]} */
 	const args = [
 		node.elseif ? b.id('$$anchor') : context.state.node,
@@ -38,7 +41,7 @@ export function IfBlock(node, context) {
 			[b.id('$$render')],
 			b.block([
 				b.if(
-					/** @type {Expression} */ (context.visit(node.test)),
+					test,
 					b.stmt(b.call(b.id('$$render'), b.id(consequent_id))),
 					alternate_id ? b.stmt(b.call(b.id('$$render'), b.id(alternate_id), b.false)) : undefined
 				)
@@ -71,7 +74,7 @@ export function IfBlock(node, context) {
 		args.push(b.id('$$elseif'));
 	}
 
-	statements.push(b.stmt(b.call('$.if', ...args)));
+	statements.push(add_svelte_meta(b.call('$.if', ...args), node, 'if'));
 
 	context.state.init.push(b.block(statements));
 }

@@ -25,7 +25,13 @@ export function assignment_value_stale(property, location) {
  */
 export function binding_property_non_reactive(binding, location) {
 	if (DEV) {
-		console.warn(`%c[svelte] binding_property_non_reactive\n%c${location ? `\`${binding}\` (${location}) is binding to a non-reactive property` : `\`${binding}\` is binding to a non-reactive property`}\nhttps://svelte.dev/e/binding_property_non_reactive`, bold, normal);
+		console.warn(
+			`%c[svelte] binding_property_non_reactive\n%c${location
+				? `\`${binding}\` (${location}) is binding to a non-reactive property`
+				: `\`${binding}\` is binding to a non-reactive property`}\nhttps://svelte.dev/e/binding_property_non_reactive`,
+			bold,
+			normal
+		);
 	} else {
 		console.warn(`https://svelte.dev/e/binding_property_non_reactive`);
 	}
@@ -76,7 +82,13 @@ export function hydration_attribute_changed(attribute, html, value) {
  */
 export function hydration_html_changed(location) {
 	if (DEV) {
-		console.warn(`%c[svelte] hydration_html_changed\n%c${location ? `The value of an \`{@html ...}\` block ${location} changed between server and client renders. The client value will be ignored in favour of the server value` : 'The value of an `{@html ...}` block changed between server and client renders. The client value will be ignored in favour of the server value'}\nhttps://svelte.dev/e/hydration_html_changed`, bold, normal);
+		console.warn(
+			`%c[svelte] hydration_html_changed\n%c${location
+				? `The value of an \`{@html ...}\` block ${location} changed between server and client renders. The client value will be ignored in favour of the server value`
+				: 'The value of an `{@html ...}` block changed between server and client renders. The client value will be ignored in favour of the server value'}\nhttps://svelte.dev/e/hydration_html_changed`,
+			bold,
+			normal
+		);
 	} else {
 		console.warn(`https://svelte.dev/e/hydration_html_changed`);
 	}
@@ -88,7 +100,13 @@ export function hydration_html_changed(location) {
  */
 export function hydration_mismatch(location) {
 	if (DEV) {
-		console.warn(`%c[svelte] hydration_mismatch\n%c${location ? `Hydration failed because the initial UI does not match what was rendered on the server. The error occurred near ${location}` : 'Hydration failed because the initial UI does not match what was rendered on the server'}\nhttps://svelte.dev/e/hydration_mismatch`, bold, normal);
+		console.warn(
+			`%c[svelte] hydration_mismatch\n%c${location
+				? `Hydration failed because the initial UI does not match what was rendered on the server. The error occurred near ${location}`
+				: 'Hydration failed because the initial UI does not match what was rendered on the server'}\nhttps://svelte.dev/e/hydration_mismatch`,
+			bold,
+			normal
+		);
 	} else {
 		console.warn(`https://svelte.dev/e/hydration_mismatch`);
 	}
@@ -155,6 +173,17 @@ export function ownership_invalid_mutation(name, location, prop, parent) {
 		console.warn(`%c[svelte] ownership_invalid_mutation\n%cMutating unbound props (\`${name}\`, at ${location}) is strongly discouraged. Consider using \`bind:${prop}={...}\` in ${parent} (or using a callback) instead\nhttps://svelte.dev/e/ownership_invalid_mutation`, bold, normal);
 	} else {
 		console.warn(`https://svelte.dev/e/ownership_invalid_mutation`);
+	}
+}
+
+/**
+ * The `value` property of a `<select multiple>` element should be an array, but it received a non-array value. The selection will be kept as is.
+ */
+export function select_multiple_invalid_value() {
+	if (DEV) {
+		console.warn(`%c[svelte] select_multiple_invalid_value\n%cThe \`value\` property of a \`<select multiple>\` element should be an array, but it received a non-array value. The selection will be kept as is.\nhttps://svelte.dev/e/select_multiple_invalid_value`, bold, normal);
+	} else {
+		console.warn(`https://svelte.dev/e/select_multiple_invalid_value`);
 	}
 }
 

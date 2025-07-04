@@ -5,7 +5,7 @@
 import { walk } from 'zimmerframe';
 import { set_scope } from '../../scope.js';
 import { extract_identifiers } from '../../../utils/ast.js';
-import * as b from '../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { dev, filename } from '../../../state.js';
 import { render_stylesheet } from '../css/index.js';
 import { AssignmentExpression } from './visitors/AssignmentExpression.js';
@@ -99,7 +99,7 @@ export function server_component(analysis, options) {
 		template: /** @type {any} */ (null),
 		namespace: options.namespace,
 		preserve_whitespace: options.preserveWhitespace,
-		private_derived: new Map(),
+		state_fields: new Map(),
 		skip_hydration_boundaries: false
 	};
 
@@ -241,6 +241,9 @@ export function server_component(analysis, options) {
 		.../** @type {Statement[]} */ (instance.body),
 		.../** @type {Statement[]} */ (template.body)
 	]);
+
+	// trick esrap into including comments
+	component_block.loc = instance.loc;
 
 	if (analysis.props_id) {
 		// need to be placed on first line of the component for hydration
@@ -395,7 +398,7 @@ export function server_module(analysis, options) {
 		// to be present for `javascript_visitors_legacy` and so is included in module
 		// transform state as well as component transform state
 		legacy_reactive_statements: new Map(),
-		private_derived: new Map()
+		state_fields: new Map()
 	};
 
 	const module = /** @type {Program} */ (

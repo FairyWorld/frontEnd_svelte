@@ -1,6 +1,6 @@
 /** @import { Derived, Effect } from '#client' */
 import { DEV } from 'esm-env';
-import { CLEAN, DERIVED, DIRTY, EFFECT_HAS_DERIVED, MAYBE_DIRTY, UNOWNED } from '../constants.js';
+import { CLEAN, DERIVED, DIRTY, EFFECT_PRESERVED, MAYBE_DIRTY, UNOWNED } from '#client/constants';
 import {
 	active_reaction,
 	active_effect,
@@ -9,7 +9,8 @@ import {
 	update_reaction,
 	increment_write_version,
 	set_active_effect,
-	push_reaction_value
+	push_reaction_value,
+	is_destroying_effect
 } from '../runtime.js';
 import { equals, safe_equals } from './equality.js';
 import * as e from '../errors.js';
@@ -37,7 +38,7 @@ export function derived(fn) {
 	} else {
 		// Since deriveds are evaluated lazily, any effects created inside them are
 		// created too late to ensure that the parent effect is added to the tree
-		active_effect.f |= EFFECT_HAS_DERIVED;
+		active_effect.f |= EFFECT_PRESERVED;
 	}
 
 	/** @type {Derived<V>} */
@@ -52,7 +53,8 @@ export function derived(fn) {
 		rv: 0,
 		v: /** @type {V} */ (null),
 		wv: 0,
-		parent: parent_derived ?? active_effect
+		parent: parent_derived ?? active_effect,
+		ac: null
 	};
 
 	if (DEV && tracing_mode_flag) {
@@ -172,13 +174,18 @@ export function execute_derived(derived) {
  */
 export function update_derived(derived) {
 	var value = execute_derived(derived);
-	var status =
-		(skip_reaction || (derived.f & UNOWNED) !== 0) && derived.deps !== null ? MAYBE_DIRTY : CLEAN;
-
-	set_signal_status(derived, status);
 
 	if (!derived.equals(value)) {
 		derived.v = value;
 		derived.wv = increment_write_version();
 	}
+
+	// don't mark derived clean if we're reading it inside a
+	// cleanup function, or it will cache a stale value
+	if (is_destroying_effect) return;
+
+	var status =
+		(skip_reaction || (derived.f & UNOWNED) !== 0) && derived.deps !== null ? MAYBE_DIRTY : CLEAN;
+
+	set_signal_status(derived, status);
 }

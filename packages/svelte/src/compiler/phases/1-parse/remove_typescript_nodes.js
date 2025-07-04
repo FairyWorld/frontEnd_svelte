@@ -1,7 +1,7 @@
 /** @import { Context, Visitors } from 'zimmerframe' */
 /** @import { FunctionExpression, FunctionDeclaration } from 'estree' */
 import { walk } from 'zimmerframe';
-import * as b from '../../utils/builders.js';
+import * as b from '#compiler/builders';
 import * as e from '../../errors.js';
 
 /**
@@ -114,6 +114,19 @@ const visitors = {
 	FunctionDeclaration: remove_this_param,
 	TSDeclareFunction() {
 		return b.empty;
+	},
+	ClassBody(node, context) {
+		const body = [];
+		for (const _child of node.body) {
+			const child = context.visit(_child);
+			if (child.type !== 'PropertyDefinition' || !child.declare) {
+				body.push(child);
+			}
+		}
+		return {
+			...node,
+			body
+		};
 	},
 	ClassDeclaration(node, context) {
 		if (node.declare) {

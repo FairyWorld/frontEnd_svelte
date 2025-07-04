@@ -1,13 +1,13 @@
 /** @import { ArrayExpression, Expression, Identifier, ObjectExpression } from 'estree' */
 /** @import { AST, ExpressionMetadata } from '#compiler' */
-/** @import { ComponentClientTransformState, ComponentContext } from '../../types' */
+/** @import { ComponentContext } from '../../types' */
 import { escape_html } from '../../../../../../escaping.js';
 import { normalize_attribute } from '../../../../../../utils.js';
 import { is_ignored } from '../../../../../state.js';
 import { is_event_attribute } from '../../../../../utils/ast.js';
-import * as b from '../../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { build_class_directives_object, build_style_directives_object } from '../RegularElement.js';
-import { build_template_chunk, get_expression_id } from './utils.js';
+import { build_expression, build_template_chunk, Memoizer } from './utils.js';
 
 /**
  * @param {Array<AST.Attribute | AST.SpreadAttribute>} attributes
@@ -16,28 +16,24 @@ import { build_template_chunk, get_expression_id } from './utils.js';
  * @param {ComponentContext} context
  * @param {AST.RegularElement | AST.SvelteElement} element
  * @param {Identifier} element_id
- * @param {Identifier} attributes_id
  */
-export function build_set_attributes(
+export function build_attribute_effect(
 	attributes,
 	class_directives,
 	style_directives,
 	context,
 	element,
-	element_id,
-	attributes_id
+	element_id
 ) {
-	let is_dynamic = false;
-
 	/** @type {ObjectExpression['properties']} */
 	const values = [];
 
+	const memoizer = new Memoizer();
+
 	for (const attribute of attributes) {
 		if (attribute.type === 'Attribute') {
-			const { value, has_state } = build_attribute_value(
-				attribute.value,
-				context,
-				(value, metadata) => (metadata.has_call ? get_expression_id(context.state, value) : value)
+			const { value } = build_attribute_value(attribute.value, context, (value, metadata) =>
+				metadata.has_call ? memoizer.add(value) : value
 			);
 
 			if (
@@ -51,16 +47,11 @@ export function build_set_attributes(
 			} else {
 				values.push(b.init(attribute.name, value));
 			}
-
-			is_dynamic ||= has_state;
 		} else {
-			// objects could contain reactive getters -> play it safe and always assume spread attributes are reactive
-			is_dynamic = true;
-
 			let value = /** @type {Expression} */ (context.visit(attribute));
 
 			if (attribute.metadata.expression.has_call) {
-				value = get_expression_id(context.state, value);
+				value = memoizer.add(value);
 			}
 
 			values.push(b.spread(value));
@@ -72,12 +63,9 @@ export function build_set_attributes(
 			b.prop(
 				'init',
 				b.array([b.id('$.CLASS')]),
-				build_class_directives_object(class_directives, context)
+				build_class_directives_object(class_directives, context, memoizer)
 			)
 		);
-
-		is_dynamic ||=
-			class_directives.find((directive) => directive.metadata.expression.has_state) !== null;
 	}
 
 	if (style_directives.length) {
@@ -85,31 +73,27 @@ export function build_set_attributes(
 			b.prop(
 				'init',
 				b.array([b.id('$.STYLE')]),
-				build_style_directives_object(style_directives, context)
+				build_style_directives_object(style_directives, context, memoizer)
 			)
 		);
-
-		is_dynamic ||= style_directives.some((directive) => directive.metadata.expression.has_state);
 	}
 
-	const call = b.call(
-		'$.set_attributes',
-		element_id,
-		is_dynamic ? attributes_id : b.null,
-		b.object(values),
-		element.metadata.scoped &&
-			context.state.analysis.css.hash !== '' &&
-			b.literal(context.state.analysis.css.hash),
-		is_ignored(element, 'hydration_attribute_changed') && b.true
+	const ids = memoizer.apply();
+
+	context.state.init.push(
+		b.stmt(
+			b.call(
+				'$.attribute_effect',
+				element_id,
+				b.arrow(ids, b.object(values)),
+				memoizer.sync_values(),
+				element.metadata.scoped &&
+					context.state.analysis.css.hash !== '' &&
+					b.literal(context.state.analysis.css.hash),
+				is_ignored(element, 'hydration_attribute_changed') && b.true
+			)
+		)
 	);
-
-	if (is_dynamic) {
-		context.state.init.push(b.let(attributes_id));
-		const update = b.stmt(b.assignment('=', attributes_id, call));
-		context.state.update.push(update);
-	} else {
-		context.state.init.push(b.stmt(call));
-	}
 }
 
 /**
@@ -130,7 +114,7 @@ export function build_attribute_value(value, context, memoize = (value) => value
 			return { value: b.literal(chunk.data), has_state: false };
 		}
 
-		let expression = /** @type {Expression} */ (context.visit(chunk.expression));
+		let expression = build_expression(context, chunk.expression, chunk.metadata.expression);
 
 		return {
 			value: memoize(expression, chunk.metadata.expression),
@@ -138,7 +122,7 @@ export function build_attribute_value(value, context, memoize = (value) => value
 		};
 	}
 
-	return build_template_chunk(value, context.visit, context.state, memoize);
+	return build_template_chunk(value, context, context.state, memoize);
 }
 
 /**
@@ -167,7 +151,7 @@ export function build_set_class(element, node_id, attribute, class_directives, c
 			value = b.call('$.clsx', value);
 		}
 
-		return metadata.has_call ? get_expression_id(context.state, value) : value;
+		return metadata.has_call ? context.state.memoizer.add(value) : value;
 	});
 
 	/** @type {Identifier | undefined} */
@@ -235,7 +219,7 @@ export function build_set_class(element, node_id, attribute, class_directives, c
  */
 export function build_set_style(node_id, attribute, style_directives, context) {
 	let { value, has_state } = build_attribute_value(attribute.value, context, (value, metadata) =>
-		metadata.has_call ? get_expression_id(context.state, value) : value
+		metadata.has_call ? context.state.memoizer.add(value) : value
 	);
 
 	/** @type {Identifier | undefined} */
@@ -244,7 +228,7 @@ export function build_set_style(node_id, attribute, style_directives, context) {
 	/** @type {ObjectExpression | Identifier | undefined} */
 	let prev;
 
-	/** @type {ArrayExpression | ObjectExpression | undefined} */
+	/** @type {Expression | undefined} */
 	let next;
 
 	if (style_directives.length) {

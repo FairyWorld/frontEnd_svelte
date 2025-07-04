@@ -3,7 +3,7 @@
 /** @import { ComponentAnalysis, Analysis } from '../../types' */
 /** @import { Visitors, ComponentClientTransformState, ClientTransformState } from './types' */
 import { walk } from 'zimmerframe';
-import * as b from '../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { build_getter, is_state_source } from './utils.js';
 import { render_stylesheet } from '../css/index.js';
 import { dev, filename } from '../../../state.js';
@@ -56,6 +56,7 @@ import { TitleElement } from './visitors/TitleElement.js';
 import { TransitionDirective } from './visitors/TransitionDirective.js';
 import { UpdateExpression } from './visitors/UpdateExpression.js';
 import { UseDirective } from './visitors/UseDirective.js';
+import { AttachTag } from './visitors/AttachTag.js';
 import { VariableDeclaration } from './visitors/VariableDeclaration.js';
 
 /** @type {Visitors} */
@@ -131,6 +132,7 @@ const visitors = {
 	TransitionDirective,
 	UpdateExpression,
 	UseDirective,
+	AttachTag,
 	VariableDeclaration
 };
 
@@ -152,17 +154,12 @@ export function client_component(analysis, options) {
 		legacy_reactive_imports: [],
 		legacy_reactive_statements: new Map(),
 		metadata: {
-			context: {
-				template_needs_import_node: false,
-				template_contains_script_tag: false
-			},
 			namespace: options.namespace,
 			bound_contenteditable: false
 		},
 		events: new Set(),
 		preserve_whitespace: options.preserveWhitespace,
-		public_state: new Map(),
-		private_state: new Map(),
+		state_fields: new Map(),
 		transform: {},
 		in_constructor: false,
 		instance_level_snippets: [],
@@ -171,10 +168,9 @@ export function client_component(analysis, options) {
 		// these are set inside the `Fragment` visitor, and cannot be used until then
 		init: /** @type {any} */ (null),
 		update: /** @type {any} */ (null),
-		expressions: /** @type {any} */ (null),
 		after_update: /** @type {any} */ (null),
 		template: /** @type {any} */ (null),
-		locations: /** @type {any} */ (null)
+		memoizer: /** @type {any} */ (null)
 	};
 
 	const module = /** @type {ESTree.Program} */ (
@@ -365,6 +361,9 @@ export function client_component(analysis, options) {
 			: b.stmt(b.call('$.init', analysis.immutable ? b.true : undefined)),
 		.../** @type {ESTree.Statement[]} */ (template.body)
 	]);
+
+	// trick esrap into including comments
+	component_block.loc = instance.loc;
 
 	if (!analysis.runes) {
 		// Bind static exports to props so that people can access them with bind:x
@@ -669,8 +668,7 @@ export function client_module(analysis, options) {
 		options,
 		scope: analysis.module.scope,
 		scopes: analysis.module.scopes,
-		public_state: new Map(),
-		private_state: new Map(),
+		state_fields: new Map(),
 		transform: {},
 		in_constructor: false
 	};

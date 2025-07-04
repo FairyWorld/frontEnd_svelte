@@ -1,14 +1,14 @@
-/** @import { AssignmentExpression, Expression, ExpressionStatement, Identifier, MemberExpression, SequenceExpression, Literal, Super, UpdateExpression } from 'estree' */
+/** @import { AssignmentExpression, Expression, Identifier, MemberExpression, SequenceExpression, Literal, Super, UpdateExpression, ExpressionStatement } from 'estree' */
 /** @import { AST, ExpressionMetadata } from '#compiler' */
-/** @import { ComponentClientTransformState, Context } from '../../types' */
+/** @import { ComponentClientTransformState, ComponentContext, Context } from '../../types' */
 import { walk } from 'zimmerframe';
 import { object } from '../../../../../utils/ast.js';
-import * as b from '../../../../../utils/builders.js';
+import * as b from '#compiler/builders';
 import { sanitize_template_string } from '../../../../../utils/sanitize_template_string.js';
 import { regex_is_valid_identifier } from '../../../../patterns.js';
 import is_reference from 'is-reference';
-import { dev, is_ignored, locator } from '../../../../../state.js';
-import { create_derived } from '../../utils.js';
+import { dev, is_ignored, locator, component_name } from '../../../../../state.js';
+import { build_getter, create_derived } from '../../utils.js';
 
 /**
  * @param {ComponentClientTransformState} state
@@ -21,26 +21,55 @@ export function memoize_expression(state, value) {
 }
 
 /**
- *
- * @param {ComponentClientTransformState} state
- * @param {Expression} value
+ * A utility for extracting complex expressions (such as call expressions)
+ * from templates and replacing them with `$0`, `$1` etc
  */
-export function get_expression_id(state, value) {
-	return b.id(`$${state.expressions.push(value) - 1}`);
+export class Memoizer {
+	/** @type {Array<{ id: Identifier, expression: Expression }>} */
+	#sync = [];
+
+	/**
+	 * @param {Expression} expression
+	 */
+	add(expression) {
+		const id = b.id('#'); // filled in later
+
+		this.#sync.push({ id, expression });
+
+		return id;
+	}
+
+	apply() {
+		return this.#sync.map((memo, i) => {
+			memo.id.name = `$${i}`;
+			return memo.id;
+		});
+	}
+
+	deriveds(runes = true) {
+		return this.#sync.map((memo) =>
+			b.let(memo.id, b.call(runes ? '$.derived' : '$.derived_safe_equal', b.thunk(memo.expression)))
+		);
+	}
+
+	sync_values() {
+		if (this.#sync.length === 0) return;
+		return b.array(this.#sync.map((memo) => b.thunk(memo.expression)));
+	}
 }
 
 /**
  * @param {Array<AST.Text | AST.ExpressionTag>} values
- * @param {(node: AST.SvelteNode, state: any) => any} visit
+ * @param {ComponentContext} context
  * @param {ComponentClientTransformState} state
  * @param {(value: Expression, metadata: ExpressionMetadata) => Expression} memoize
  * @returns {{ value: Expression, has_state: boolean }}
  */
 export function build_template_chunk(
 	values,
-	visit,
-	state,
-	memoize = (value, metadata) => (metadata.has_call ? get_expression_id(state, value) : value)
+	context,
+	state = context.state,
+	memoize = (value, metadata) => (metadata.has_call ? state.memoizer.add(value) : value)
 ) {
 	/** @type {Expression[]} */
 	const expressions = [];
@@ -65,15 +94,21 @@ export function build_template_chunk(
 			state.scope.get('undefined')
 		) {
 			let value = memoize(
-				/** @type {Expression} */ (visit(node.expression, state)),
+				build_expression(context, node.expression, node.metadata.expression, state),
 				node.metadata.expression
 			);
 
-			has_state ||= node.metadata.expression.has_state;
+			const evaluated = state.scope.evaluate(value);
+
+			has_state ||= node.metadata.expression.has_state && !evaluated.is_known;
 
 			if (values.length === 1) {
 				// If we have a single expression, then pass that in directly to possibly avoid doing
 				// extra work in the template_effect (instead we do the work in set_text).
+				if (evaluated.is_known) {
+					value = b.literal((evaluated.value ?? '') + '');
+				}
+
 				return { value, has_state };
 			}
 
@@ -89,10 +124,8 @@ export function build_template_chunk(
 				}
 			}
 
-			const evaluated = state.scope.evaluate(value);
-
 			if (evaluated.is_known) {
-				quasi.value.cooked += evaluated.value + '';
+				quasi.value.cooked += (evaluated.value ?? '') + '';
 			} else {
 				if (!evaluated.is_defined) {
 					// add `?? ''` where necessary
@@ -123,18 +156,20 @@ export function build_template_chunk(
  * @param {ComponentClientTransformState} state
  */
 export function build_render_statement(state) {
+	const ids = state.memoizer.apply();
+	const values = state.memoizer.sync_values();
+
 	return b.stmt(
 		b.call(
 			'$.template_effect',
 			b.arrow(
-				state.expressions.map((_, i) => b.id(`$${i}`)),
+				ids,
 				state.update.length === 1 && state.update[0].type === 'ExpressionStatement'
 					? state.update[0].expression
 					: b.block(state.update)
 			),
-			state.expressions.length > 0 &&
-				b.array(state.expressions.map((expression) => b.thunk(expression))),
-			state.expressions.length > 0 && !state.analysis.runes && b.id('$.derived_safe_equal')
+			values,
+			values && !state.analysis.runes && b.id('$.derived_safe_equal')
 		)
 	);
 }
@@ -158,20 +193,6 @@ export function parse_directive_name(name) {
 	}
 
 	return expression;
-}
-
-/**
- * @param {ComponentClientTransformState} state
- * @param {string} id
- * @param {Expression | undefined} init
- * @param {Expression} value
- * @param {ExpressionStatement} update
- */
-export function build_update_assignment(state, id, init, value, update) {
-	state.init.push(b.var(id, init));
-	state.update.push(
-		b.if(b.binary('!==', b.id(id), b.assignment('=', b.id(id), value)), b.block([update]))
-	);
 }
 
 /**
@@ -320,15 +341,18 @@ export function validate_mutation(node, context, expression) {
 	const state = /** @type {ComponentClientTransformState} */ (context.state);
 	state.analysis.needs_mutation_validation = true;
 
-	/** @type {Array<Identifier | Literal>} */
+	/** @type {Array<Identifier | Literal | Expression>} */
 	const path = [];
 
 	while (left.type === 'MemberExpression') {
 		if (left.property.type === 'Literal') {
 			path.unshift(left.property);
 		} else if (left.property.type === 'Identifier') {
+			const transform = Object.hasOwn(context.state.transform, left.property.name)
+				? context.state.transform[left.property.name]
+				: null;
 			if (left.computed) {
-				path.unshift(left.property);
+				path.unshift(transform?.read ? transform.read(left.property) : left.property);
 			} else {
 				path.unshift(b.literal(left.property.name));
 			}
@@ -350,5 +374,84 @@ export function validate_mutation(node, context, expression) {
 		expression,
 		loc && b.literal(loc.line),
 		loc && b.literal(loc.column)
+	);
+}
+
+/**
+ *
+ * @param {ComponentContext} context
+ * @param {Expression} expression
+ * @param {ExpressionMetadata} metadata
+ */
+export function build_expression(context, expression, metadata, state = context.state) {
+	const value = /** @type {Expression} */ (context.visit(expression, state));
+
+	// Components not explicitly in legacy mode might be expected to be in runes mode (especially since we didn't
+	// adjust this behavior until recently, which broke people's existing components), so we also bail in this case.
+	// Kind of an in-between-mode.
+	if (context.state.analysis.runes || context.state.analysis.maybe_runes) {
+		return value;
+	}
+
+	if (!metadata.has_call && !metadata.has_member_expression && !metadata.has_assignment) {
+		return value;
+	}
+
+	// Legacy reactivity is coarse-grained, looking at the statically visible dependencies. Replicate that here
+	const sequence = b.sequence([]);
+
+	for (const binding of metadata.references) {
+		if (binding.kind === 'normal' && binding.declaration_kind !== 'import') {
+			continue;
+		}
+
+		var getter = build_getter({ ...binding.node }, state);
+
+		if (
+			binding.kind === 'bindable_prop' ||
+			binding.kind === 'template' ||
+			binding.declaration_kind === 'import' ||
+			binding.node.name === '$$props' ||
+			binding.node.name === '$$restProps'
+		) {
+			getter = b.call('$.deep_read_state', getter);
+		}
+
+		sequence.expressions.push(getter);
+	}
+
+	sequence.expressions.push(b.call('$.untrack', b.thunk(value)));
+
+	return sequence;
+}
+
+/**
+ * Wraps a statement/expression with dev stack tracking in dev mode
+ * @param {Expression} expression - The function call to wrap (e.g., $.if, $.each, etc.)
+ * @param {{ start?: number }} node - AST node for location info
+ * @param {'component' | 'if' | 'each' | 'await' | 'key' | 'render'} type - Type of block/component
+ * @param {Record<string, number | string>} [additional] - Any additional properties to add to the dev stack entry
+ * @returns {ExpressionStatement} - Statement with or without dev stack wrapping
+ */
+export function add_svelte_meta(expression, node, type, additional) {
+	if (!dev) {
+		return b.stmt(expression);
+	}
+
+	const location = node.start !== undefined && locator(node.start);
+	if (!location) {
+		return b.stmt(expression);
+	}
+
+	return b.stmt(
+		b.call(
+			'$.add_svelte_meta',
+			b.arrow([], expression),
+			b.literal(type),
+			b.id(component_name),
+			b.literal(location.line),
+			b.literal(location.column),
+			additional && b.object(Object.entries(additional).map(([k, v]) => b.init(k, b.literal(v))))
+		)
 	);
 }

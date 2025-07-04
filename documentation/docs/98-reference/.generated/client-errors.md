@@ -74,6 +74,12 @@ Effect cannot be created inside a `$derived` value that was not itself created i
 Maximum update depth exceeded. This can happen when a reactive block or effect repeatedly sets a new value. Svelte limits the number of nested updates to prevent infinite loops
 ```
 
+### get_abort_signal_outside_reaction
+
+```
+`getAbortSignal()` can only be called inside an effect or derived
+```
+
 ### hydration_failed
 
 ```
@@ -125,7 +131,7 @@ Cannot set prototype of `$state` object
 ### state_unsafe_mutation
 
 ```
-Updating state inside a derived or a template expression is forbidden. If the value should not be reactive, declare it without `$state`
+Updating state inside `$derived(...)`, `$inspect(...)` or a template expression is forbidden. If the value should not be reactive, declare it without `$state`
 ```
 
 This error occurs when state is updated while evaluating a `$derived`. You might encounter it while trying to 'derive' two pieces of state in one go:
